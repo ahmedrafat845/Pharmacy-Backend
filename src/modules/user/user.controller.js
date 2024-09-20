@@ -115,7 +115,7 @@ export const signIn=async(req, res) => {
         if(match){
             let token=jwt.sign({age:user.age,email:user.email,
               userName:user.userName,role:user.role,gender:user.gender,
-             phone:user.phone,address:user.address,id:user._id},'ahmedrafat123')
+             phone:user.phone,address:user.address,userId:user._id},'ahmedrafat123')
             res.status(201).json({msg:"success",token})
 
 
