@@ -2,13 +2,13 @@ import { productModel } from "../../../DataBase/models/product.model.js"
 
 
 export const addProduct=async(req,res)=>{
-    const {name,price,category,quantity,bestSeller,offer,description}=req.body
+    const {name,price,category,quantity,bestSeller,offer,description,image}=req.body
    try{
     const isProduct=await productModel.findOne({name})
     if(isProduct){
         res.status(400).json({msg:"product already added"})
     }else{
-        await productModel.insertMany({name,price,category,quantity,bestSeller,offer,description})
+        await productModel.insertMany({name,price,category,quantity,bestSeller,offer,description,image})
         res.status(201).json({msg:"product added successfully"})
     }
    }catch(error){
@@ -43,7 +43,7 @@ export const getAllProducts = async (req, res) => {
 
 
 export const updateProduct = async (req, res) => {
-    const { _id, name, quantity, price, category, description, bestSeller, offer } = req.body;
+    const { _id, name, quantity, price, category, description, bestSeller, offer,image } = req.body;
     try {
       const product = await productModel.findById(_id);
       if (!product) {
@@ -52,7 +52,7 @@ export const updateProduct = async (req, res) => {
   
       const updatedProduct = await productModel.findByIdAndUpdate(
         _id,
-        { name, quantity, price, category, description, bestSeller, offer },
+        { name, quantity, price, category, description, bestSeller, offer ,image},
         { new: true } 
       );
   
