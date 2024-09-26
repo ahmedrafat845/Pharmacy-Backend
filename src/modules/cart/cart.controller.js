@@ -1,4 +1,5 @@
 import { cartModel } from "../../../DataBase/models/cart.model.js";
+import { orderModel } from "../../../DataBase/models/order.model.js";
 import { productModel } from "../../../DataBase/models/product.model.js";
 import { catchError } from "../../utiles/catchError.js";
 import jwt from 'jsonwebtoken';
@@ -133,15 +134,14 @@ export const removeProductFromCart = catchError(async (req, res) => {
 
 export const getCartForUser = catchError(async (req, res) => {
     const userId = extractUserIdFromToken(req); 
-
-    
     const cart = await cartModel.findOne({ userId: userId });
-
     if (!cart) {
         return res.status(404).json({ msg: "Cart not found" });
+    } else if (cart.totalPrice === 0) {
+        return res.json({ msg: "cart is empty", cart });
     }
-
-    res.json({ msg: "Cart retrieved successfully", cart });
+    return res.json({ msg: "Cart retrieved successfully", cart });
+    
 });
 
 export const clearCart = catchError(async (req, res) => {
@@ -161,3 +161,99 @@ export const clearCart = catchError(async (req, res) => {
 
     res.json({ msg: "Cart cleared successfully", cart });
 });
+
+
+
+export const processCashPayment = catchError(async (req, res) => {
+    const userId = extractUserIdFromToken(req); 
+
+    // Find the user's cart
+    const cart = await cartModel.findOne({ userId: userId });
+    if (!cart || cart.totalQuantity === 0) {
+        return res.status(400).json({ msg: "Cart is empty or not found" });
+    }
+
+    // Create a new order
+    const order = new orderModel({
+        userId,
+        items: cart.items,
+        totalPrice: cart.totalPrice,
+        paymentMethod: 'cash',
+        status: 'pending' // or whatever initial status you want
+    });
+
+    // Save the order
+    await order.save();
+
+    // Optionally, clear the user's cart after payment
+    cart.items = [];
+    cart.totalQuantity = 0;
+    cart.totalPrice = 0;
+    await cart.save();
+
+    res.json({ msg: "Payment processed successfully", order });
+});
+
+
+
+const axios = require('axios');
+
+const PAYMOB_API_KEY = 'ZXlKaGJHY2lPaUpJVXpVeE1pSXNJblI1Y0NJNklrcFhWQ0o5LmV5SmpiR0Z6Y3lJNklrMWxjbU5vWVc1MElpd2ljSEp2Wm1sc1pWOXdheUk2T1RrM05qZzJMQ0p1WVcxbElqb2lhVzVwZEdsaGJDSjkuWGJNSEktY05PV0x1YkZadnlLaGdQSGxFTTNVY0ZnY0p3aE9fUHFqU1VwRnlPVmVFMnhVTXQ3TGEycFpRenIyRG5TVU1HUTdUS2FFMmZ4YldYeTVRbFE=';
+const INTEGRATION_ID = 'your_integration_id_here';
+const IFRAME_ID = 'your_iframe_id_here';
+
+// Process Visa Payment
+export const processVisaPayment = async (req, res) => {
+    const { amount, currency } = req.body; // Get payment details from request body
+
+    try {
+        // Step 1: Authenticate to get token
+        const authResponse = await axios.post('https://accept.paymob.com/api/auth/tokens', {
+            api_key: PAYMOB_API_KEY
+        });
+        const token = authResponse.data.token;
+
+        // Step 2: Create an order
+        const orderResponse = await axios.post('https://accept.paymob.com/api/ecommerce/orders', {
+            auth_token: token,
+            delivery_needed: false,
+            amount_cents: amount, // Paymob expects amount in cents
+            currency,
+            items: [],
+        });
+        const orderId = orderResponse.data.id;
+
+        // Step 3: Generate payment key
+        const paymentKeyResponse = await axios.post('https://accept.paymob.com/api/acceptance/payment_keys', {
+            auth_token: token,
+            amount_cents: amount,
+            expiration: 3600,
+            order_id: orderId,
+            billing_data: {
+                apartment: "NA",
+                email: "user@example.com",
+                floor: "NA",
+                first_name: "John",
+                last_name: "Doe",
+                phone_number: "+201000000000",
+                city: "Cairo",
+                country: "EG",
+                street: "NA",
+                postal_code: "NA"
+            },
+            currency,
+            integration_id: INTEGRATION_ID,
+        });
+        const paymentToken = paymentKeyResponse.data.token;
+
+        // Step 4: Prepare the Visa payment URL
+        const paymentUrl = `https://accept.paymob.com/api/acceptance/iframes/${IFRAME_ID}?payment_token=${paymentToken}`;
+
+        // Send response with the payment URL for the client to redirect to
+        res.json({ msg: 'Payment initiated, please complete in the iframe', paymentUrl });
+
+    } catch (error) {
+        // Handle error in the process
+        res.status(500).json({ msg: 'Payment failed', error: error.message });
+    }
+};
